@@ -8,6 +8,8 @@
     "lint": "vue-cli-service lint"
   },
   "dependencies": {
+    "p5": "^0.7.3",
+    "tone": "^13.4.9",
     "vue": "^2.6.6"
   },
   "devDependencies": {
