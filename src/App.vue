@@ -437,8 +437,7 @@
     },
     mounted() {
       this.setupTone()
-      this.startDrone()
-
+      
       // Setup Sketch
       this.colorUp()
       // setTimeout(()=>{this.showInstruction = false}, 60000)
