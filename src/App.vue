@@ -1,16 +1,18 @@
 <template>
 <div id="app">
-  <div id="pageHeader">
-    <span>This is a debug version of the breathing exercise from the <a href="http://www.digitalprayers.work" target="_blank"><span class="prayersLink">Digital Prayers</span></a> desktop application.</span>
-  </div>
-  <div id="pageIntro">
-    <p>If you'd like to see it in context please download the desktop app (strongly recommended) or visit the site using the chrome browser.</p>
-    <p>To modify the drone click `start` and the controls will appear. The drone will evolve on its own but you can manually change. Feel free to <a href="mailto:alexcarusillo@gmail.com">email me</a> suggestions</p>
-  </div>
-  <div id="sketch">
+  <div id="introCopy">
+    <div id="pageHeader">
+      <span>This is the full version of the breathing exercise from the <a href="http://www.digitalprayers.work" target="_blank"><span class="prayersLink">Digital Prayers</span></a> desktop application.</span>
+    </div>
+    <div id="pageIntro">
+      <p>If you'd like to see it in context please download the desktop app (strongly recommended) or visit the site using the chrome browser.</p>
+      <p>Otherwise after clicking `start` the drone will evolve on its own but you can override. Feel free to <a href="mailto:alexcarusillo@gmail.com">email me</a> if you make something interesting.</p>
+    </div>
     <span id="startButton"
           v-if="!droneStarted"
           @click="startDrone(); droneStarted = true">Click To Start Drone</span>
+  </div>
+  <div id="sketch">
     <div id="sketch-holder"></div>
     <span id="instruction"
           v-if="showInstruction">{{currentInstruction}}</span>
@@ -24,35 +26,35 @@
              v-if="config.id == index">
           <label>Chord Base [each note transposed up and down one ocave]</label>
           <select v-model="config.chord"
-                  @change="changeChord($event, index)">
+                  @change="changeChord(config.chord, index)">
             <option v-for="chord in chords">{{chord}}</option>
           </select>
           <label>Filter Q [amount of white noise]</label>
           <select v-model="config.Q"
                   :index="index"
-                  @change="changeFilterQ($event, index)">
+                  @change="changeFilterQ(config.Q, index)">
             <option v-for="q in qOptions">{{q}}</option>
           </select>
         </div>
         <label>Playback Rate</label>
         <input type="range"
-               min="0"
-               max="1.5"
+               min="0.1"
+               max="0.9"
                step="0.05"
                v-model="lineConfig.playbackRate"
-               @change="changeNoiseConfig(index)" />
+               @change="changeNoisePlaybackRate(lineConfig.playbackRate, index)" /> 
         <label>Volume</label>
         <input type="range"
                min="-25"
                max="0"
                step="1"
                v-model="lineConfig.volume"
-               @change="changeNoiseConfig(index)" />
+               @change="changeNoiseVolume(lineConfig.volume, index)" />
       </div>
     </div>
   </div>
   <div id="roomControlsContainer" v-show="droneStarted">
-    <span class="droneControls">Room Texture Controls</span>
+    <span class="droneControls">Room Texture Controls [In Order Of Effect]</span>
     <div id="controls">
       <div id="feedbackDelay"
            class="patchConfig">
@@ -231,11 +233,14 @@ export default {
         'triangle'
       ],
       qOptions: [
+        400,
+        500,
         600,
         800,
         1200,
         1600,
-        2000
+        2000,
+        2400
       ],
       chords: [
         [
@@ -400,7 +405,7 @@ export default {
       this.audioLine.panner = new Tone.AutoPanner(this.droneConfig.autoPannerConfig).start()
       this.audioLine.reverb = new Tone.Freeverb(this.droneConfig.freeverbConfig)
       this.audioLine.chorus = new Tone.Chorus(this.droneConfig.chorusConfig)
-      this.audioLine.gain = new Tone.Gain(0.5)
+      this.audioLine.gain = new Tone.Gain(0.75)
       this.audioLine.compressor = new Tone.Compressor(this.droneConfig.compressorConfig)
 
     },
@@ -461,15 +466,19 @@ export default {
         })
       })
     },
-    changeNoiseConfig(index) {
+    changeNoiseVolume(newVolume, index) {
       let lineName = 'line' + String(index)
-      this.audioLine.noise[lineName].set(this.droneConfig.noise[index])
+      this.audioLine.noise[lineName].volume.linearRampTo(newVolume, 10)
     },
-    changeChord(event, index) {
+    changeNoisePlaybackRate(newRate, index) {
       let lineName = 'line' + String(index)
-      let chord = JSON.parse(event.target.value)
+      this.audioLine.noise[lineName].set({'playbackRate': newRate})
+    },
+    changeChord(chord, index) {
+      let lineName = 'line' + String(index)
+      let parsedChord = JSON.parse(chord)
 
-      chord.map((note, noteIndex) => {
+      parsedChord.map((note, noteIndex) => {
         // convert note to tone object
         let frequency = new Tone.Frequency(note)
 
@@ -480,25 +489,33 @@ export default {
           frequency.transpose(-12)
         ].map((transposedFreq, transposedIndex) => {
           let filterIndex = (noteIndex * 3) + transposedIndex
-          // Immediate Change
           this.audioLine.filters[lineName][filterIndex].set({
             frequency: transposedFreq
           })
-
-        // Ramp to new value
-        // this.filters[filterIndex].frequency.linearRampToValueAtTime(transposedFreq, Tone.Time() + 10)
         })
       })
-
     },
-    changeFilterQ(event, index) {
+    changeFilterQ(newQ, index) {
       var lineName = 'line' + String(index)
-      var newQ = event.target.value
-      console.log('new Q:', newQ)
-
       this.audioLine.filters[lineName].map(filter => {
         filter.Q.rampTo(newQ, 5)
       })
+    },
+    changeNoiseParams() {
+      let affectedLine = _.sample(['line0', 'line1'])
+      let changeIndex = _.random(1, 5)
+
+      if (changeIndex === 1) {
+        this.changeChord()
+      } else if (changeIndex === 2) {
+        this.changeFilterQ()
+      } else if (changeIndex === 3 ) {
+        this.changeNoiseVolume()
+      } else if (changeIndex === 4) {
+        this.changeNoisePlaybackRate()
+      }
+
+
     }
   },
   mounted() {
@@ -575,21 +592,20 @@ export default {
   margin-bottom: 30px;
 }
 
+#startButton {
+  cursor: pointer;
+  background: white;
+  padding: 10px;
+  font-size: 22px;
+  border: 2px solid black;
+  width: 200px;
+}
+#startButton:hover {
+  background: #D2E9FC;
+}
+
+
 #sketch {
-  #startButton {
-    cursor: pointer;
-    position: absolute;
-    background: white;
-    padding: 10px;
-    font-size: 22px;
-    border: 2px solid black;
-    left: 300px;
-    top: 200px;
-    width: 200px;
-  }
-  #startButton:hover {
-    background: #D2E9FC;
-  }
   width: 800px;
   position: relative;
   #instruction {
