@@ -5,48 +5,55 @@
   </div>
   <div id="pageIntro">
     <p>If you'd like to see it in context please download the desktop app (strongly recommended) or visit the site using the chrome browser.</p>
-    <p>If you're here to play with the drone just change the values in the `Drone Controls` section and the drone will adapt. Feel free to <a href="mailto:alexcarusillo@gmail.com">email me</a> suggestions</p>
+    <p>To modify the drone click `start` and the controls will appear. The drone will evolve on its own but you can manually change. Feel free to <a href="mailto:alexcarusillo@gmail.com">email me</a> suggestions</p>
   </div>
   <div id="sketch">
-    <span id="startButton" v-if="!droneStarted" @click="startDrone(); droneStarted = true">Click To Start Drone</span>
+    <span id="startButton"
+          v-if="!droneStarted"
+          @click="startDrone(); droneStarted = true">Click To Start Drone</span>
     <div id="sketch-holder"></div>
     <span id="instruction"
           v-if="showInstruction">{{currentInstruction}}</span>
   </div>
-<!--   <div v-if="!showExplanation">
-    <span @click="showExplanation = true">Show sound & tech explanation</span>
-  </div>
-  <div v-else>
-    <span @click="showExplanation = false">hide explanation</span>
-    <p>Cool</p>
-  </div> -->
-<!--   <div id="colorControlsContainer">
-    <span class="droneControls">Drone Color Controls</span>
-    <button @click="startColor">Play Chord</button>
-  </div> -->
-  <div id="noiseControls">
-    <div class="noiseControls">
-      <span>Noise Line 0</span>
+  <div id="noiseControls" v-show="droneStarted">
+    <div class="individualLine"
+         v-for="(lineConfig, index) in droneConfig.noise">
+      <span class="title">Noise Line {{index}}</span>
+      <div>
+        <div v-for="config in droneConfig.filterConfig"
+             v-if="config.id == index">
+          <label>Chord Base [each note transposed up and down one ocave]</label>
+          <select v-model="config.chord"
+                  @change="changeChord($event, index)">
+            <option v-for="chord in chords">{{chord}}</option>
+          </select>
+          <label>Filter Q [amount of white noise]</label>
+          <select v-model="config.Q"
+                  :index="index"
+                  @change="changeFilterQ($event, index)">
+            <option v-for="q in qOptions">{{q}}</option>
+          </select>
+        </div>
+        <label>Playback Rate</label>
+        <input type="range"
+               min="0"
+               max="1.5"
+               step="0.05"
+               v-model="lineConfig.playbackRate"
+               @change="changeNoiseConfig(index)" />
+        <label>Volume</label>
+        <input type="range"
+               min="-25"
+               max="0"
+               step="1"
+               v-model="lineConfig.volume"
+               @change="changeNoiseConfig(index)" />
+      </div>
     </div>
-    <div class="noiseControls">
-      <span> Noise Line 1</span>
-    </div>
   </div>
-  <div id="controlsContainer">
-    <span class="droneControls">Drone Texture Controls</span>
+  <div id="roomControlsContainer" v-show="droneStarted">
+    <span class="droneControls">Room Texture Controls</span>
     <div id="controls">
-      <div class="selectControl">
-         <label>Filter Q Value (amount of white noise):</label>
-         <select v-model="activeQ" @change="changeFilterQ">
-          <option v-for="q in qOptions">{{q}}</option>
-        </select>
-      </div>
-      <div class="selectControl">
-        <label>Chord:</label>
-        <select v-model="activeChord">
-          <option v-for="chord in chords">{{chord}}</option>
-        </select>
-      </div>
       <div id="feedbackDelay"
            class="patchConfig">
         <div class="title">
@@ -174,236 +181,259 @@
     </div>
   </div>
 </div>
-
 </template>
 
 <script>
-  import p5 from 'p5';
-  import Tone from 'tone';
-  import _ from 'lodash'
+import p5 from 'p5';
+import Tone from 'tone';
+import _ from 'lodash';
 
-  function randItem(arr) {
-    return arr[Math.floor(Math.random() * arr.length)]
-  }
+function randItem(arr) {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
 
-  // TODO: Leaving in this in pure js as I think there's a performance hit? Ask somebody about that....
-  // p5 setup
-  var xoff = 0
-  var yoff = 0
-  var zoff = 0
-  var rOffset = 20
-  var gOffset = 0
-  var bOffset = 20
-  var counter = 0
-  var rInc = 0
-  var gInc = 0
-  var bInc = 0
-  var rIncBase = 1
-  var gIncBase = 0
-  var bIncBase = 0.5
+// TODO: Leaving in this in pure js as I think there's a performance hit? Ask somebody about that....
+// p5 setup
+var xoff = 0
+var yoff = 0
+var zoff = 0
+var rOffset = 20
+var gOffset = 0
+var bOffset = 20
+var counter = 0
+var rInc = 0
+var gInc = 0
+var bInc = 0
+var rIncBase = 1
+var gIncBase = 0
+var bIncBase = 0.5
 
-  export default {
-    data() {
-      return {
-        // meta
-        droneStarted: true,
-        showExplanation: false,
+export default {
+  data() {
+    return {
+      // meta
+      droneStarted: true,
+      showExplanation: false,
 
-        // p5
-        showInstruction: true,
-        currentInstruction: 'in...',
-        xinc: 0.009,
-        yinc: 0.007,
-        // zinc: 0.0000015,
-        zinc: 0.000015,
+      // p5
+      showInstruction: true,
+      currentInstruction: 'in...',
+      xinc: 0.009,
+      yinc: 0.007,
+      // zinc: 0.0000015,
+      zinc: 0.000015,
 
-        // Tone
-        oscillatorArray: [
-          'sine',
-          'square',
-          'sawtooth',
-          'triangle'
+      // Tone
+      oscillatorArray: [
+        'sine',
+        'square',
+        'sawtooth',
+        'triangle'
+      ],
+      qOptions: [
+        600,
+        800,
+        1200,
+        1600,
+        2000
+      ],
+      chords: [
+        [
+          'C3',
+          'E3',
+          'G3',
+          'B3',
+          'C3'
         ],
-        qOptions: [
-          600,
-          800,
-          1200,
-          1600,
-          2000
+        [
+          'A3',
+          'C4',
+          'E4',
+          'G4',
+          'A3'
         ],
-        chords: [
-          [
-            'C3',
-            'E3',
-            'G3',
-            'B3',
-            'C3'
-          ],
-          [
-            'A3',
-            'C4',
-            'E4',
-            'G4',
-            'A3'
-          ],
-          [
-            'D3',
-            'G3',
-            'A3',
-            'C4',
-            'E4'
-          ],
-          [
-            'E3',
-            'G3',
-            'B3',
-            'D4',
-            'E3'
-          ]
+        [
+          'D3',
+          'G3',
+          'A3',
+          'C4',
+          'E4'
         ],
-        colorChords: [
-          ['C3', 'Eb3', 'G3'],
-          ['D3', 'F3', 'Ab3'],
-          ['Eb3', 'G3', 'Bb3'],
-          ['F3', 'Ab3', 'C4'],
-          ['G3', 'Bb3', 'D4'],
-          ['Ab3', 'C4', 'Eb4'],
-          ['Bb3', 'D4', 'F4']
+        [
+          'E3',
+          'G3',
+          'B3',
+          'D4',
+          'E3'
+        ]
+      ],
+      droneConfig: {
+        noise: [
+          {
+            type: 'brown',
+            volume: -10,
+            playbackRate: 0.4
+          },
+          {
+            type: 'brown',
+            fadeIn: -15,
+            playbackRate: 0.2
+          }
         ],
-        colorNotes: [
-          'Ab2', 'Ab3', 'Bb2', 'Bb3', 'C2', 'C3', 'C4', 'D2', 'D3', 'D4', 'Eb2', 'Eb3', 'Eb4', 'G2', 'G3', 'G4', 'F2', 'F3', 'F4'],
-        color : {},
-        activeQ: '',
-        activeChord: [],
-        filters: [],
-        droneConfig: {
-          feedbackDelayConfig: {
-            feedback: 0.45,
-            delayTime: 0.75,
-            maxDelay: 5,
-            wet: 1
+        filterConfig: {
+          line0: {
+            id: 0,
+            chord: [],
+            Q: null
           },
-          autoPannerConfig: {
-            frequency: 0.35,
-            type: 'square',
-            depth: 0.3
-          },
-          freeverbConfig: {
-            roomSize: 0.9,
-            dampening: 2000
-          },
-          chorusConfig: {
-            frequency: 0.35,
-            delayTime: 3.5,
-            depth: 0.7,
-            type: 'sine',
-            spread: 180
-          },
-          compressorConfig: {
-            ratio: 12,
-            threshold: -24
+          line1: {
+            id: 1,
+            chord: [],
+            Q: null
           }
         },
-        audioLine: {
-          noise: {},
-          delay: {},
-          panner: {},
-          reverb: {},
-          chorus: {},
-          gain: {},
-          compressor: {}
+        feedbackDelayConfig: {
+          feedback: 0.45,
+          delayTime: 0.75,
+          maxDelay: 5,
+          wet: 1
+        },
+        autoPannerConfig: {
+          frequency: 0.35,
+          type: 'square',
+          depth: 0.3
+        },
+        freeverbConfig: {
+          roomSize: 0.9,
+          dampening: 2000
+        },
+        chorusConfig: {
+          frequency: 0.35,
+          delayTime: 3.5,
+          depth: 0.7,
+          type: 'sine',
+          spread: 180
+        },
+        compressorConfig: {
+          ratio: 12,
+          threshold: -24
         }
+      },
+      audioLine: {
+        noise: {
+          line0: {},
+          line1: {}
+        },
+        filters: {
+          line0: [],
+          line1: []
+        },
+        in: {},
+        delay: {},
+        panner: {},
+        reverb: {},
+        chorus: {},
+        gain: {},
+        compressor: {}
+      }
+    }
+  },
+  watch: {
+    'droneConfig.feedbackDelayConfig': {
+      handler: function() {
+        this.audioLine.delay.set(this.droneConfig.feedbackDelayConfig)
+      },
+      deep: true
+    },
+    'droneConfig.autoPannerConfig': {
+      handler: function() {
+        this.audioLine.panner.set(this.droneConfig.autoPannerConfig)
+      },
+      deep: true
+    },
+    'droneConfig.freeverbConfig': {
+      handler: function() {
+        this.audioLine.reverb.set(this.droneConfig.freeverbConfig)
+      },
+      deep: true
+    },
+    'droneConfig.chorusConfig': {
+      handler: function() {
+        this.audioLine.chorus.set(this.droneConfig.chorusConfig)
+      },
+      deep: true
+    }
+
+  },
+  methods: {
+    // p5
+    breathPause(direction) {
+      rInc = 0
+      bInc = 0
+      gInc = 0
+      this.currentInstruction = 'pause'
+      if (direction === 'down') {
+        setTimeout(this.colorDown, 1500)
+      } else {
+        setTimeout(this.colorUp, 1500)
       }
     },
-    watch: {
-      activeChord: {
-        handler: function(chord) {
-          var newChord = JSON.parse(chord)
-          this.changeChord(newChord)
-        }
-      },
-      'droneConfig.feedbackDelayConfig': {
-        handler: function() {
-          this.audioLine.delay.set(this.droneConfig.feedbackDelayConfig)
-        },
-        deep: true
-      },
-      'droneConfig.autoPannerConfig': {
-        handler: function() {
-          this.audioLine.panner.set(this.droneConfig.autoPannerConfig)
-        },
-        deep: true
-      },
-      'droneConfig.freeverbConfig': {
-        handler: function() {
-          this.audioLine.reverb.set(this.droneConfig.freeverbConfig)
-        },
-        deep: true
-      },
-      'droneConfig.chorusConfig': {
-        handler: function() {
-          this.audioLine.chorus.set(this.droneConfig.chorusConfig)
-        },
-        deep: true
-      }
+    colorUp() {
+      this.currentInstruction = 'in...'
+      rInc = rIncBase
+      bInc = bIncBase
+      gInc = gIncBase
+      setTimeout(this.breathPause, 4000, 'down')
+    },
+    colorDown() {
+      this.currentInstruction = 'out...'
+      rInc = -(rIncBase / 2)
+      bInc = -(bIncBase / 2)
+      gInc = -(gIncBase / 2)
+      setTimeout(this.breathPause, 8000, 'up')
+    },
+
+    // Tone - Texture
+    setupTone() {
+      this.audioLine.in = new Tone.Gain()
+      this.audioLine.delay = new Tone.FeedbackDelay(this.droneConfig.feedbackDelayConfig)
+      this.audioLine.panner = new Tone.AutoPanner(this.droneConfig.autoPannerConfig).start()
+      this.audioLine.reverb = new Tone.Freeverb(this.droneConfig.freeverbConfig)
+      this.audioLine.chorus = new Tone.Chorus(this.droneConfig.chorusConfig)
+      this.audioLine.gain = new Tone.Gain(0.5)
+      this.audioLine.compressor = new Tone.Compressor(this.droneConfig.compressorConfig)
 
     },
-    methods: {
-      // p5
-      breathPause(direction) {
-        rInc = 0
-        bInc = 0
-        gInc = 0
-        this.currentInstruction = 'pause'
-        if (direction === 'down') {
-          setTimeout(this.colorDown, 1500)
-        } else {
-          setTimeout(this.colorUp, 1500)
-        }
-      },
-      colorUp() {
-        this.currentInstruction = 'in...'
-        rInc = rIncBase
-        bInc = bIncBase
-        gInc = gIncBase
-        setTimeout(this.breathPause, 4000, 'down')
-      },
-      colorDown() {
-        this.currentInstruction = 'out...'
-        rInc = -(rIncBase / 2)
-        bInc = -(bIncBase / 2)
-        gInc = -(gIncBase / 2)
-        setTimeout(this.breathPause, 8000, 'up')
-      },
+    startDrone() {
+      this.colorUp()
 
-      // Tone - Texture
-      setupTone() {
-        this.audioLine.delay = new Tone.FeedbackDelay(this.droneConfig.feedbackDelayConfig)
-        this.audioLine.panner = new Tone.AutoPanner(this.droneConfig.autoPannerConfig).start()
-        this.audioLine.reverb = new Tone.Freeverb(this.droneConfig.freeverbConfig)
-        this.audioLine.chorus = new Tone.Chorus(this.droneConfig.chorusConfig)
-        this.audioLine.gain = new Tone.Gain(0.5)
-        this.audioLine.compressor = new Tone.Compressor(this.droneConfig.compressorConfig)
+      // Notes are just bandpass filters on white noise. 
+      // Allows for texture and less intensive note/effect changes
 
-      },
-      startDrone() {
-        // Notes are just bandpass filters on white noise. 
-        // Allows for texture and less intensive note/effect changes
+      // Create the white noise source
+      this.audioLine.noise.line0 = new Tone.Noise({
+        type: 'brown',
+        fadeIn: 3,
+        playbackRate: 0.4
+      }).start()
 
-        // Create the white noise source
-        this.audioLine.noise = new Tone.Noise({
-          type: 'brown',
-          fadeIn: 3,
-          playbackRate: 0.4
-        }).start()
+      this.audioLine.noise.line1 = new Tone.Noise({
+        type: 'brown',
+        fadeIn: 3,
+        playbackRate: 0.4
+      })
 
-        // Select random chord from list
-        this.activeChord = randItem(this.chords)
-        this.activeQ = randItem(this.qOptions)
+      // Select random chord from list
+      let newChord = _.sampleSize(this.chords, 2)
+      let newQ = _.sampleSize(this.qOptions, 2)
 
-        // Take each note, transpose it up and down one octave, 
-        // and create a filter letting those frequencies pass through
-        this.activeChord.map(note => {
+      // Take each note, transpose it up and down one octave, 
+      // and create a filter letting those frequencies pass through
+      newChord.map((chord, index) => {
+        let lineName = 'line' + String(index)
+        this.droneConfig.filterConfig[lineName].chord = newChord[index]
+        this.droneConfig.filterConfig[lineName].Q = newQ[index]
+        chord.map(note => {
 
           // convert note to tone object
           let frequency = new Tone.Frequency(note)
@@ -417,294 +447,74 @@
             let filter = new Tone.Filter({
               type: 'bandpass',
               frequency: transposedFreq,
-              Q: this.activeQ
+              Q: newQ[index]
             })
 
             // connect the filter and store a reference to it so it can be changed
-            this.audioLine.noise.connect(filter)
-            filter.connect(this.audioLine.delay)
-            this.filters.push(filter)
+            let lineParam = 'line' + String(index)
+            this.audioLine.noise[lineParam].connect(filter)
+            filter.connect(this.audioLine.in)
+            this.audioLine.filters[lineParam].push(filter)
 
           })
 
         })
-
-      },
-      changeChord(newChord) {
-        console.log('next chord:', newChord)
-        newChord.map((note, noteIndex) => {
-          // convert note to tone object
-          let frequency = new Tone.Frequency(note)
-
-          // transpose and create bandpass filter
-          let transposedFrequencies = [
-            frequency,
-            frequency.transpose(+12),
-            frequency.transpose(-12)
-          ].map((transposedFreq, transposedIndex) => {
-            let filterIndex = (noteIndex * 3) + transposedIndex
-            // Immediate Change
-            this.filters[filterIndex].set({
-              frequency: transposedFreq
-            })
-
-          // Ramp to new value
-          // this.filters[filterIndex].frequency.linearRampToValueAtTime(transposedFreq, Tone.Time() + 10)
-          })
-        })
-
-      },
-      changeFilterQ(event) {
-        // var newQ = randItem(this.qOptions)
-        var newQ = event.target.value
-
-        console.log('new Q:', newQ)
-        this.filters.map(filter => {
-          filter.Q.rampTo(newQ, 5)
-        })
-      },
-      // // Tone - Color
-      // createColorSource() {
-      //   let envelope = {
-      //     attack: 0.1,
-      //     release: 4,
-      //     releaseCurve: 'linear'
-      //   };
-
-      //   this.color.synth = new Tone.PolySynth(9, Tone.DuoSynth)
-      //   this.color.synth.set({
-      //     harmonicity: 1,
-      //     volume: -15,
-      //     voice0: {
-      //       oscillator: {type: 'sine'},
-      //       envelope,
-      //     },
-      //     voice1: {
-      //       oscillator: {type: 'sine'},
-      //       envelope,
-      //     },
-      //     vibratoRate: 0.5,
-      //     vibratoAmount: 0.1
-      //   })
-
-      //   this.color.distortion = new Tone.Distortion({
-      //     distortion: 0.2,
-      //     oversample: '4x'
-      //   })
-      //   this.color.filter = new Tone.Filter({
-      //     type: 'bandpass',
-      //     frequency: 300,
-      //     Q: 10
-      //   })
-      //   this.color.reverb = new Tone.Freeverb({
-      //     roomSize: 0.75,
-      //     dampening: 3000
-      //   })
-      //   this.color.delay = new Tone.FeedbackDelay({
-      //     feedback: 0.45,
-      //     delayTime: 0.75,
-      //     maxDelay: 5,
-      //     wet: 1
-      //   })
-
-        
-
-      //   this.color.panner = new Tone.Panner()
-
-      //   this.color.synth.chain(
-      //     this.color.distortion,
-      //     this.color.filter,
-      //     this.color.panner,
-      //     this.color.reverb,
-      //     this.color.delay,
-      //     this.audioLine.chorus
-
-      //   )
-      //   // this.color.envelope = new Tone.Envelope({
-      //     // attack: 2
-      //   // })
-
-      //   // this.gain = new Tone.Gain()
-
-      //   // this.color.source = new Tone.Noise({
-      //   //   type: 'pink'
-      //   // })
-      //   // this.color.source.start()
-
-      //   // this.color.ampEnv = new Tone.AmplitudeEnvelope()
-      //   // this.color.source.connect(this.color.ampEnv)
-      //   // this.color.filter = new Tone.Filter({
-      //   //   type: "bandpass",
-      //   //   frequency: 650,
-      //   //   Q: 2000
-      //   // }).toMaster()
-      //   // this.color.ampEnv.connect(this.color.filter)
-
-
-
-      //   // this.color.source.connect(this.gain)
-      //   // this.color.envelope.connect(this.gain)
-      //   // this.gain.connect(this.color.source)
-
-
-      //   // this.color.filter = new Tone.Filter({
-      //   //   type: "bandpass",
-      //   //   frequency: 250,
-      //   //   Q: 2000
-      //   // })
-      //   // this.color.in = new Tone.Gain()
-
-      //   // this.color.delay = new Tone.Delay({
-      //     // delayTime: 1,
-      //     // maxDelay: 5
-      //   // })
-
-      //   // this.color.envelope.chain(
-      //     // this.color.in
-      //   // )
-      //   // this.color.in.chain(
-      //     // this.color.filter,
-      //     // this.color.delay,
-      //     // Tone.Master
-      //   // )
-
-      // },
-      // startColor() {
-      //   this.playChord(this)
-      // },
-      // playChord(self) {
-      //   var chord = _.sampleSize(self.colorNotes, _.random(1.0, 3.0))
-      //   console.log(chord)
-      //   self.color.synth.triggerAttackRelease(chord, 5)
-
-      //   setTimeout(self => {
-      //     this.playChord(self)
-      //   }, _.random(5, 25) * 1000, this)
-
-
-
-
-      //   // console.log('FUCK')
-      //   // var noise = new Tone.Noise().start()
-      //   // var ampEnv = new Tone.AmplitudeEnvelope()
-
-      //   // var gain = new Tone.Gain(0.5).toMaster()
-      //   // noise.connect(ampEnv)
-        
-
-      //   // let frequency = new Tone.Frequency("C3")
-
-      //   // var filter = new Tone.Filter({
-      //   //   type: "bandpass",
-      //   //   frequency: frequency,
-      //   //   Q: 200
-      //   // })
-
-      //   // ampEnv.connect(filter)
-      //   // filter.connect(gain)
-
-      //   // setTimeout(filter => {
-      //   //   filter.disconnect(gain)
-      //   // })
-
-      //   // ampEnv.triggerAttackRelease(10)
-
-      //   // var chord = randItem(this.colorChords)
-      //   // console.log('color chord:', chord)
-      //   // var duration = 10000
-
-      //   // chord.map(note => {
-      //   //   // convert note to tone object
-      //   //   let frequency = new Tone.Frequency(note)          
-
-      //   //   let chordSetting = [
-      //   //     frequency,
-      //   //     frequency.transpose(+24),
-      //   //     frequency.transpose(-12)
-      //   //   ].map(transposedFreq => {
-      //   //     let filter = new Tone.Filter({
-      //   //       type: 'bandpass',
-      //   //       frequency: frequency,
-      //   //       Q: 2000
-      //   //     })
-
-      //   //     let envelope = new Tone.Envelope({
-      //   //       attack: 1,
-      //   //       release: 0
-      //   //     })
-
-      //   //     // console.log(envelope)
-
-      //   //     // envelope.connect(Tone.Master)
-
-
-      //   //     // this.color.ampEnv.triggerAttackRelease(2)
-      //   //     // this.color.source.connect(filter)
-      //   //     // filter.connect(this.color.in)
-
-      //   //     setTimeout((nodes) => {
-      //   //       console.log('disconnect')
-      //   //   //     nodes.envelope.disconnect(nodes.filter)
-      //   //   //     nodes.envelope.dispose()
-      //   //       nodes.filter.disconnect(this.color.in)
-      //   //       nodes.filter.dispose()
-      //   //     }, duration, {filter: filter, envelope: envelope})
-
-      //   //   })
-
-      //   // })
-      // }
-      // createColorSource() {
-      //   this.colorSource = new Tone.NoiseSynth({
-      //     noise: {
-      //       type: 'white'
-      //     }
-      //   }).toMaster()
-
-      // },
-      // playChord() {
-      //   // var chord = randItem(this.colorChords)
-      //   // chord.map(note => {
-      //   //   let frequency =  new Tone.Frequency(note)
-
-      //   //   let chordBlur = [
-      //   //     frequency,
-      //   //     frequency.transpose(+24),
-      //   //     frequency.transpose(-12)
-      //   //   ].map(transposedFreq => {
-      //   //     let filter = new Tone.Filter({
-      //   //       type: 'bandpass',
-      //   //       frequency: transposedFreq,
-      //   //       Q: 2000
-      //   //     })
-
-      //   //     this.colorSource.connect(filter)
-      //   //   })
-      //   // })
-
-      //   let colorSource = new Tone.NoiseSynth({
-      //     noise: {
-      //       type: 'white'
-      //     }
-      //   }).toMaster()
-      //   colorSource.triggerAttack();
-      // }
+      })
     },
-    mounted() {
-      this.setupTone()
+    changeNoiseConfig(index) {
+      let lineName = 'line' + String(index)
+      this.audioLine.noise[lineName].set(this.droneConfig.noise[index])
+    },
+    changeChord(event, index) {
+      let lineName = 'line' + String(index)
+      let chord = JSON.parse(event.target.value)
 
-      // Setup Sketch
-      this.colorUp()
-      // setTimeout(()=>{this.showInstruction = false}, 60000)
-      var viz = new p5(sketch => {
-        sketch.setup = () => {
-          var canvas = sketch.createCanvas(800, 450)
-          canvas.parent('sketch-holder')
-          sketch.pixelDensity(1)
-          this.droneStarted = false
-        // sketch.frameRate(5)
-        }
-        sketch.draw = () => {
+      chord.map((note, noteIndex) => {
+        // convert note to tone object
+        let frequency = new Tone.Frequency(note)
+
+        // transpose and create bandpass filter
+        let transposedFrequencies = [
+          frequency,
+          frequency.transpose(+12),
+          frequency.transpose(-12)
+        ].map((transposedFreq, transposedIndex) => {
+          let filterIndex = (noteIndex * 3) + transposedIndex
+          // Immediate Change
+          this.audioLine.filters[lineName][filterIndex].set({
+            frequency: transposedFreq
+          })
+
+        // Ramp to new value
+        // this.filters[filterIndex].frequency.linearRampToValueAtTime(transposedFreq, Tone.Time() + 10)
+        })
+      })
+
+    },
+    changeFilterQ(event, index) {
+      var lineName = 'line' + String(index)
+      var newQ = event.target.value
+      console.log('new Q:', newQ)
+
+      this.audioLine.filters[lineName].map(filter => {
+        filter.Q.rampTo(newQ, 5)
+      })
+    }
+  },
+  mounted() {
+    this.setupTone()
+
+    // Setup Sketch
+    var viz = new p5(sketch => {
+      sketch.setup = () => {
+        var canvas = sketch.createCanvas(800, 450)
+        canvas.parent('sketch-holder')
+        sketch.pixelDensity(1)
+        this.droneStarted = false
+      // sketch.frameRate(5)
+      }
+      sketch.draw = () => {
+        if(this.droneStarted){
           sketch.background(51)
 
           zoff = 0
@@ -731,23 +541,24 @@
           gOffset += gInc
           bOffset += bInc
         }
-      })
+      }
+    })
 
-      // Connect Tone Line
-      this.audioLine.delay.connect(this.audioLine.panner)
-      this.audioLine.panner.connect(this.audioLine.reverb)
-      this.audioLine.reverb.connect(this.audioLine.chorus)
-      this.audioLine.chorus.connect(this.audioLine.gain)
-      this.audioLine.gain.connect(this.audioLine.compressor)
-      this.audioLine.compressor.connect(Tone.Master)
-    }
-  };
+    // Connect Tone Line
+    this.audioLine.in.connect(this.audioLine.delay)
+    this.audioLine.delay.connect(this.audioLine.panner)
+    this.audioLine.panner.connect(this.audioLine.reverb)
+    this.audioLine.reverb.connect(this.audioLine.chorus)
+    this.audioLine.chorus.connect(this.audioLine.gain)
+    this.audioLine.gain.connect(this.audioLine.compressor)
+    this.audioLine.compressor.connect(Tone.Master)
+  }
+};
+
 </script>
 
 <style lang="scss">
 @import url('https://fonts.googleapis.com/css?family=Chakra+Petch|Roboto');
-
-
 #app {
   font-family: 'Roboto', sans-serif;
 }
@@ -776,11 +587,9 @@
     top: 200px;
     width: 200px;
   }
-
   #startButton:hover {
     background: #D2E9FC;
   }
-
   width: 800px;
   position: relative;
   #instruction {
@@ -792,21 +601,42 @@
   }
 }
 
+#noiseControls {
+  display: flex;
+  font-family: 'Chakra Petch', sans-serif;
+  margin-top: 40px;
 
-#controlsContainer {
+  .individualLine {
+    flex-grow: 1;
+    align-content: center;
+
+    .title {
+      font-size: 22px;
+      text-decoration: underline;
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+
+    input[type='range'] {
+      width: 80%;
+    }
+  }
+}
+
+#roomControlsContainer {
   margin-top: 40px;
   font-family: 'Chakra Petch', sans-serif;
-
   .droneControls {
     display: block;
     font-size: 22px;
     text-decoration: underline;
     margin-bottom: 15px;
   }
-
   .selectControl {
     margin-bottom: 5px;
-
     label {
       margin-right: 10px;
     }
