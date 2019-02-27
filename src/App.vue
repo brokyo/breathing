@@ -20,8 +20,20 @@
     <span @click="showExplanation = false">hide explanation</span>
     <p>Cool</p>
   </div> -->
+<!--   <div id="colorControlsContainer">
+    <span class="droneControls">Drone Color Controls</span>
+    <button @click="startColor">Play Chord</button>
+  </div> -->
+  <div id="noiseControls">
+    <div class="noiseControls">
+      <span>Noise Line 0</span>
+    </div>
+    <div class="noiseControls">
+      <span> Noise Line 1</span>
+    </div>
+  </div>
   <div id="controlsContainer">
-    <span class="droneControls">Drone Controls</span>
+    <span class="droneControls">Drone Texture Controls</span>
     <div id="controls">
       <div class="selectControl">
          <label>Filter Q Value (amount of white noise):</label>
@@ -168,6 +180,7 @@
 <script>
   import p5 from 'p5';
   import Tone from 'tone';
+  import _ from 'lodash'
 
   function randItem(arr) {
     return arr[Math.floor(Math.random() * arr.length)]
@@ -185,15 +198,15 @@
   var rInc = 0
   var gInc = 0
   var bInc = 0
-  var rIncBase = 2
+  var rIncBase = 1
   var gIncBase = 0
-  var bIncBase = 1
+  var bIncBase = 0.5
 
   export default {
     data() {
       return {
         // meta
-        droneStarted: false,
+        droneStarted: true,
         showExplanation: false,
 
         // p5
@@ -248,6 +261,18 @@
             'E3'
           ]
         ],
+        colorChords: [
+          ['C3', 'Eb3', 'G3'],
+          ['D3', 'F3', 'Ab3'],
+          ['Eb3', 'G3', 'Bb3'],
+          ['F3', 'Ab3', 'C4'],
+          ['G3', 'Bb3', 'D4'],
+          ['Ab3', 'C4', 'Eb4'],
+          ['Bb3', 'D4', 'F4']
+        ],
+        colorNotes: [
+          'Ab2', 'Ab3', 'Bb2', 'Bb3', 'C2', 'C3', 'C4', 'D2', 'D3', 'D4', 'Eb2', 'Eb3', 'Eb4', 'G2', 'G3', 'G4', 'F2', 'F3', 'F4'],
+        color : {},
         activeQ: '',
         activeChord: [],
         filters: [],
@@ -351,13 +376,13 @@
         setTimeout(this.breathPause, 8000, 'up')
       },
 
-      // Tone
+      // Tone - Texture
       setupTone() {
         this.audioLine.delay = new Tone.FeedbackDelay(this.droneConfig.feedbackDelayConfig)
         this.audioLine.panner = new Tone.AutoPanner(this.droneConfig.autoPannerConfig).start()
         this.audioLine.reverb = new Tone.Freeverb(this.droneConfig.freeverbConfig)
         this.audioLine.chorus = new Tone.Chorus(this.droneConfig.chorusConfig)
-        this.audioLine.gain = new Tone.Gain(1)
+        this.audioLine.gain = new Tone.Gain(0.5)
         this.audioLine.compressor = new Tone.Compressor(this.droneConfig.compressorConfig)
 
       },
@@ -366,7 +391,11 @@
         // Allows for texture and less intensive note/effect changes
 
         // Create the white noise source
-        this.audioLine.noise = new Tone.Noise('white').start()
+        this.audioLine.noise = new Tone.Noise({
+          type: 'brown',
+          fadeIn: 3,
+          playbackRate: 0.4
+        }).start()
 
         // Select random chord from list
         this.activeChord = randItem(this.chords)
@@ -433,11 +462,237 @@
         this.filters.map(filter => {
           filter.Q.rampTo(newQ, 5)
         })
-      }
+      },
+      // // Tone - Color
+      // createColorSource() {
+      //   let envelope = {
+      //     attack: 0.1,
+      //     release: 4,
+      //     releaseCurve: 'linear'
+      //   };
+
+      //   this.color.synth = new Tone.PolySynth(9, Tone.DuoSynth)
+      //   this.color.synth.set({
+      //     harmonicity: 1,
+      //     volume: -15,
+      //     voice0: {
+      //       oscillator: {type: 'sine'},
+      //       envelope,
+      //     },
+      //     voice1: {
+      //       oscillator: {type: 'sine'},
+      //       envelope,
+      //     },
+      //     vibratoRate: 0.5,
+      //     vibratoAmount: 0.1
+      //   })
+
+      //   this.color.distortion = new Tone.Distortion({
+      //     distortion: 0.2,
+      //     oversample: '4x'
+      //   })
+      //   this.color.filter = new Tone.Filter({
+      //     type: 'bandpass',
+      //     frequency: 300,
+      //     Q: 10
+      //   })
+      //   this.color.reverb = new Tone.Freeverb({
+      //     roomSize: 0.75,
+      //     dampening: 3000
+      //   })
+      //   this.color.delay = new Tone.FeedbackDelay({
+      //     feedback: 0.45,
+      //     delayTime: 0.75,
+      //     maxDelay: 5,
+      //     wet: 1
+      //   })
+
+        
+
+      //   this.color.panner = new Tone.Panner()
+
+      //   this.color.synth.chain(
+      //     this.color.distortion,
+      //     this.color.filter,
+      //     this.color.panner,
+      //     this.color.reverb,
+      //     this.color.delay,
+      //     this.audioLine.chorus
+
+      //   )
+      //   // this.color.envelope = new Tone.Envelope({
+      //     // attack: 2
+      //   // })
+
+      //   // this.gain = new Tone.Gain()
+
+      //   // this.color.source = new Tone.Noise({
+      //   //   type: 'pink'
+      //   // })
+      //   // this.color.source.start()
+
+      //   // this.color.ampEnv = new Tone.AmplitudeEnvelope()
+      //   // this.color.source.connect(this.color.ampEnv)
+      //   // this.color.filter = new Tone.Filter({
+      //   //   type: "bandpass",
+      //   //   frequency: 650,
+      //   //   Q: 2000
+      //   // }).toMaster()
+      //   // this.color.ampEnv.connect(this.color.filter)
+
+
+
+      //   // this.color.source.connect(this.gain)
+      //   // this.color.envelope.connect(this.gain)
+      //   // this.gain.connect(this.color.source)
+
+
+      //   // this.color.filter = new Tone.Filter({
+      //   //   type: "bandpass",
+      //   //   frequency: 250,
+      //   //   Q: 2000
+      //   // })
+      //   // this.color.in = new Tone.Gain()
+
+      //   // this.color.delay = new Tone.Delay({
+      //     // delayTime: 1,
+      //     // maxDelay: 5
+      //   // })
+
+      //   // this.color.envelope.chain(
+      //     // this.color.in
+      //   // )
+      //   // this.color.in.chain(
+      //     // this.color.filter,
+      //     // this.color.delay,
+      //     // Tone.Master
+      //   // )
+
+      // },
+      // startColor() {
+      //   this.playChord(this)
+      // },
+      // playChord(self) {
+      //   var chord = _.sampleSize(self.colorNotes, _.random(1.0, 3.0))
+      //   console.log(chord)
+      //   self.color.synth.triggerAttackRelease(chord, 5)
+
+      //   setTimeout(self => {
+      //     this.playChord(self)
+      //   }, _.random(5, 25) * 1000, this)
+
+
+
+
+      //   // console.log('FUCK')
+      //   // var noise = new Tone.Noise().start()
+      //   // var ampEnv = new Tone.AmplitudeEnvelope()
+
+      //   // var gain = new Tone.Gain(0.5).toMaster()
+      //   // noise.connect(ampEnv)
+        
+
+      //   // let frequency = new Tone.Frequency("C3")
+
+      //   // var filter = new Tone.Filter({
+      //   //   type: "bandpass",
+      //   //   frequency: frequency,
+      //   //   Q: 200
+      //   // })
+
+      //   // ampEnv.connect(filter)
+      //   // filter.connect(gain)
+
+      //   // setTimeout(filter => {
+      //   //   filter.disconnect(gain)
+      //   // })
+
+      //   // ampEnv.triggerAttackRelease(10)
+
+      //   // var chord = randItem(this.colorChords)
+      //   // console.log('color chord:', chord)
+      //   // var duration = 10000
+
+      //   // chord.map(note => {
+      //   //   // convert note to tone object
+      //   //   let frequency = new Tone.Frequency(note)          
+
+      //   //   let chordSetting = [
+      //   //     frequency,
+      //   //     frequency.transpose(+24),
+      //   //     frequency.transpose(-12)
+      //   //   ].map(transposedFreq => {
+      //   //     let filter = new Tone.Filter({
+      //   //       type: 'bandpass',
+      //   //       frequency: frequency,
+      //   //       Q: 2000
+      //   //     })
+
+      //   //     let envelope = new Tone.Envelope({
+      //   //       attack: 1,
+      //   //       release: 0
+      //   //     })
+
+      //   //     // console.log(envelope)
+
+      //   //     // envelope.connect(Tone.Master)
+
+
+      //   //     // this.color.ampEnv.triggerAttackRelease(2)
+      //   //     // this.color.source.connect(filter)
+      //   //     // filter.connect(this.color.in)
+
+      //   //     setTimeout((nodes) => {
+      //   //       console.log('disconnect')
+      //   //   //     nodes.envelope.disconnect(nodes.filter)
+      //   //   //     nodes.envelope.dispose()
+      //   //       nodes.filter.disconnect(this.color.in)
+      //   //       nodes.filter.dispose()
+      //   //     }, duration, {filter: filter, envelope: envelope})
+
+      //   //   })
+
+      //   // })
+      // }
+      // createColorSource() {
+      //   this.colorSource = new Tone.NoiseSynth({
+      //     noise: {
+      //       type: 'white'
+      //     }
+      //   }).toMaster()
+
+      // },
+      // playChord() {
+      //   // var chord = randItem(this.colorChords)
+      //   // chord.map(note => {
+      //   //   let frequency =  new Tone.Frequency(note)
+
+      //   //   let chordBlur = [
+      //   //     frequency,
+      //   //     frequency.transpose(+24),
+      //   //     frequency.transpose(-12)
+      //   //   ].map(transposedFreq => {
+      //   //     let filter = new Tone.Filter({
+      //   //       type: 'bandpass',
+      //   //       frequency: transposedFreq,
+      //   //       Q: 2000
+      //   //     })
+
+      //   //     this.colorSource.connect(filter)
+      //   //   })
+      //   // })
+
+      //   let colorSource = new Tone.NoiseSynth({
+      //     noise: {
+      //       type: 'white'
+      //     }
+      //   }).toMaster()
+      //   colorSource.triggerAttack();
+      // }
     },
     mounted() {
       this.setupTone()
-      
+
       // Setup Sketch
       this.colorUp()
       // setTimeout(()=>{this.showInstruction = false}, 60000)
@@ -446,6 +701,7 @@
           var canvas = sketch.createCanvas(800, 450)
           canvas.parent('sketch-holder')
           sketch.pixelDensity(1)
+          this.droneStarted = false
         // sketch.frameRate(5)
         }
         sketch.draw = () => {
@@ -474,7 +730,6 @@
           rOffset += rInc
           gOffset += gInc
           bOffset += bInc
-
         }
       })
 
