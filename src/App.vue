@@ -33,10 +33,20 @@
           </select>
           <label>Filter Q [amount of white noise]</label>
           <select v-model="config.Q"
-                  :index="index"
                   @change="changeFilterQ(config.Q, index)">
             <option v-for="q in qOptions">{{q}}</option>
           </select>
+        </div>
+        <div v-for="config in droneConfig.originPannerConfig"              
+              v-if="config.id == index">
+         <label>Noise Base Location [Pan]</label>
+         <input type="range"
+                min="-1"
+                max="1"
+                step="0.05"
+                v-model="config.pan"
+                @change="changePan($event.target.value, index)"
+                >
         </div>
         <label>Playback Rate</label>
         <input type="range"
@@ -302,9 +312,15 @@ export default {
         },
         originPannerConfig: {
           line0: {
+            id: 0,
+            min: -0.7,
+            max: -0.1,
             pan: -0.2
           },
           line1: {
+            id: 1,
+            min: 0.7,
+            max: 0.1,
             pan: 0.2
           }
         },
@@ -485,7 +501,14 @@ export default {
         })
       })
 
-    setTimeout(this.changeNoiseParams, 25000, this)
+      setTimeout(this.changeNoiseParams, 25000, this)
+    },
+    changePan(location, index) {
+      var lineName = 'line' + String(index)
+      console.log('New Pan @', lineName, '| Value:', location)
+
+      this.droneConfig.originPannerConfig[lineName].pan = location;
+      this.audioLine.panners[lineName].set({"pan": location})
     },
     changeChord(chord, index) {
       let lineName = 'line' + String(index)
@@ -525,7 +548,7 @@ export default {
       console.log('New Volume @', lineName, '| Value:', newVolume)
 
       this.droneConfig.noise[index].volume = newVolume
-      this.audioLine.noise[lineName].volume.linearRampTo(newVolume, 10)
+      this.audioLine.noise[lineName].volume.linearRampTo(newVolume, 20)
     },
     changeNoisePlaybackRate(newRate, index) {
       let lineName = 'line' + String(index)
@@ -541,7 +564,8 @@ export default {
         0,
         1
       ])
-      let changeIndex = _.random(1, 4)
+      let changeIndex = _.random(1, 5)
+      changeIndex = 5
 
       if (changeIndex === 1) {
         // Dumb hack so random matches the value the html selector. Surely there's a better way to do this.
@@ -551,14 +575,20 @@ export default {
         let nextQ = _.sample(vue.qOptions)
         vue.changeFilterQ(nextQ, affectedLine)
       } else if (changeIndex === 3) {
-        let nextVol = _.random(-25, -5)
+        let nextVol = _.random(-15, -5)
         vue.changeNoiseVolume(nextVol, affectedLine)
       } else if (changeIndex === 4) {
         let nextPlaybackRate = _.random(0.1, 0.8)
         vue.changeNoisePlaybackRate(nextPlaybackRate, affectedLine)
+      } else if (changeIndex === 5) {
+        let newLocation = _.random(0.1, 0.7)
+        if (affectedLine === 0){
+          let newLocation = -newLocation
+        }
+        vue.changePan(newLocation, affectedLine)
       }
 
-    setTimeout(vue.changeNoiseParams, _.random(20000, 40000), vue)
+      setTimeout(vue.changeNoiseParams, _.random(20000, 40000), vue)
     }
   },
   mounted() {
