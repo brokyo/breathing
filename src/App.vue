@@ -294,7 +294,7 @@ export default {
           },
           {
             type: 'brown',
-            fadeIn: -15,
+            fadeIn: -18,
             playbackRate: 0.2
           }
         ],
@@ -575,7 +575,7 @@ export default {
         let nextQ = _.sample(vue.qOptions)
         vue.changeFilterQ(nextQ, affectedLine)
       } else if (changeIndex === 3) {
-        let nextVol = _.random(-15, -5)
+        let nextVol = _.random(-20, -5)
         vue.changeNoiseVolume(nextVol, affectedLine)
       } else if (changeIndex === 4) {
         let nextPlaybackRate = _.random(0.1, 0.8)
