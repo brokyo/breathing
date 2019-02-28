@@ -5,7 +5,7 @@
       <span>This is the full version of the breathing exercise from the <a href="http://www.digitalprayers.work" target="_blank"><span class="prayersLink">Digital Prayers</span></a> desktop application.</span>
     </div>
     <div id="pageIntro">
-      <p>If you'd like to see it in context please download the desktop app (strongly recommended) or visit the site using the chrome browser.</p>
+      <p>If you'd like to see it in context please download the desktop app (strongly recommended) [note: you're here early and this doesn't yet exist] or visit the site using the chrome browser.</p>
       <p>Otherwise after clicking `start` the drone will evolve on its own but you can override. Feel free to <a href="mailto:alexcarusillo@gmail.com">email me</a> if you make something interesting.</p>
     </div>
     <span id="startButton"
@@ -17,7 +17,8 @@
     <span id="instruction"
           v-if="showInstruction">{{currentInstruction}}</span>
   </div>
-  <div id="noiseControls" v-show="droneStarted">
+  <div id="noiseControls"
+       v-show="droneStarted">
     <div class="individualLine"
          v-for="(lineConfig, index) in droneConfig.noise">
       <span class="title">Noise Line {{index}}</span>
@@ -25,8 +26,9 @@
         <div v-for="config in droneConfig.filterConfig"
              v-if="config.id == index">
           <label>Chord Base [each note transposed up and down one ocave]</label>
+          {{config.chord}}
           <select v-model="config.chord"
-                  @change="changeChord(config.chord, index)">
+                  @change="changeChord($event.target.value, index)">
             <option v-for="chord in chords">{{chord}}</option>
           </select>
           <label>Filter Q [amount of white noise]</label>
@@ -42,7 +44,7 @@
                max="0.9"
                step="0.05"
                v-model="lineConfig.playbackRate"
-               @change="changeNoisePlaybackRate(lineConfig.playbackRate, index)" /> 
+               @change="changeNoisePlaybackRate(lineConfig.playbackRate, index)" />
         <label>Volume</label>
         <input type="range"
                min="-25"
@@ -53,7 +55,8 @@
       </div>
     </div>
   </div>
-  <div id="roomControlsContainer" v-show="droneStarted">
+  <div id="roomControlsContainer"
+       v-show="droneStarted">
     <span class="droneControls">Room Texture Controls [In Order Of Effect]</span>
     <div id="controls">
       <div id="feedbackDelay"
@@ -183,6 +186,7 @@
     </div>
   </div>
 </div>
+
 </template>
 
 <script>
@@ -239,38 +243,37 @@ export default {
         800,
         1200,
         1600,
-        2000,
-        2400
+        2000
       ],
       chords: [
-        [
-          'C3',
-          'E3',
-          'G3',
-          'B3',
-          'C3'
-        ],
-        [
-          'A3',
-          'C4',
-          'E4',
-          'G4',
-          'A3'
-        ],
-        [
-          'D3',
-          'G3',
-          'A3',
-          'C4',
-          'E4'
-        ],
-        [
-          'E3',
-          'G3',
-          'B3',
-          'D4',
-          'E3'
-        ]
+          [
+            'C3',
+            'E3',
+            'G3',
+            'B3',
+            'C3'
+          ],
+          [
+            'A3',
+            'C4',
+            'E4',
+            'G4',
+            'A3'
+          ],
+          [
+            'D3',
+            'G3',
+            'A3',
+            'C4',
+            'E4'
+          ],
+          [
+            'E3',
+            'G3',
+            'B3',
+            'D4',
+            'E3'
+          ]
       ],
       droneConfig: {
         noise: [
@@ -295,6 +298,14 @@ export default {
             id: 1,
             chord: [],
             Q: null
+          }
+        },
+        originPannerConfig: {
+          line0: {
+            pan: -0.2
+          },
+          line1: {
+            pan: 0.2
           }
         },
         feedbackDelayConfig: {
@@ -333,6 +344,10 @@ export default {
           line0: [],
           line1: []
         },
+        panners: {
+          line0: {},
+          line1: {}
+        },
         in: {},
         delay: {},
         panner: {},
@@ -368,7 +383,6 @@ export default {
       },
       deep: true
     }
-
   },
   methods: {
     // p5
@@ -428,6 +442,9 @@ export default {
         playbackRate: 0.4
       })
 
+      this.audioLine.panners.line0 = new Tone.Panner(-0.2)
+      this.audioLine.panners.line1 = new Tone.Panner(-0.2)
+
       // Select random chord from list
       let newChord = _.sampleSize(this.chords, 2)
       let newQ = _.sampleSize(this.qOptions, 2)
@@ -458,64 +475,90 @@ export default {
             // connect the filter and store a reference to it so it can be changed
             let lineParam = 'line' + String(index)
             this.audioLine.noise[lineParam].connect(filter)
-            filter.connect(this.audioLine.in)
+            filter.connect(this.audioLine.panners[lineParam])
+            this.audioLine.panners[lineParam].connect(this.audioLine.in)
+
             this.audioLine.filters[lineParam].push(filter)
 
           })
 
         })
       })
-    },
-    changeNoiseVolume(newVolume, index) {
-      let lineName = 'line' + String(index)
-      this.audioLine.noise[lineName].volume.linearRampTo(newVolume, 10)
-    },
-    changeNoisePlaybackRate(newRate, index) {
-      let lineName = 'line' + String(index)
-      this.audioLine.noise[lineName].set({'playbackRate': newRate})
+
+    setTimeout(this.changeNoiseParams, 25000, this)
     },
     changeChord(chord, index) {
       let lineName = 'line' + String(index)
-      let parsedChord = JSON.parse(chord)
+      let chordBase = JSON.parse(chord)
 
-      parsedChord.map((note, noteIndex) => {
-        // convert note to tone object
-        let frequency = new Tone.Frequency(note)
+      this.droneConfig.filterConfig[lineName].chord = chordBase
+      console.log('New Chord @', lineName, '| Value:', chordBase)
 
-        // transpose and create bandpass filter
-        let transposedFrequencies = [
-          frequency,
-          frequency.transpose(+12),
-          frequency.transpose(-12)
-        ].map((transposedFreq, transposedIndex) => {
-          let filterIndex = (noteIndex * 3) + transposedIndex
-          this.audioLine.filters[lineName][filterIndex].set({
-            frequency: transposedFreq
+      chordBase.map((note, noteIndex) => {
+          // convert note to tone object
+          let frequency = new Tone.Frequency(note)
+
+          // transpose and create bandpass filter
+          let transposedFrequencies = [
+            frequency,
+            frequency.transpose(+12),
+            frequency.transpose(-12)
+          ].map((transposedFreq, transposedIndex) => {
+            let filterIndex = (noteIndex * 3) + transposedIndex
+            this.audioLine.filters[lineName][filterIndex].set({
+              frequency: transposedFreq
+            })
           })
-        })
       })
     },
     changeFilterQ(newQ, index) {
       var lineName = 'line' + String(index)
+      console.log('New Q @', lineName, '| Value:', newQ)
+
+      this.droneConfig.filterConfig[lineName].Q = newQ
       this.audioLine.filters[lineName].map(filter => {
         filter.Q.rampTo(newQ, 5)
       })
     },
-    changeNoiseParams() {
-      let affectedLine = _.sample(['line0', 'line1'])
-      let changeIndex = _.random(1, 5)
+    changeNoiseVolume(newVolume, index) {
+      let lineName = 'line' + String(index)
+      console.log('New Volume @', lineName, '| Value:', newVolume)
+
+      this.droneConfig.noise[index].volume = newVolume
+      this.audioLine.noise[lineName].volume.linearRampTo(newVolume, 10)
+    },
+    changeNoisePlaybackRate(newRate, index) {
+      let lineName = 'line' + String(index)
+      console.log('New Rate @', lineName, '| Value:', newRate)
+
+      this.droneConfig.noise[index].playbackRate = newRate
+      this.audioLine.noise[lineName].set({
+        'playbackRate': newRate
+      })
+    },
+    changeNoiseParams(vue) {
+      let affectedLine = _.sample([
+        0,
+        1
+      ])
+      let changeIndex = _.random(1, 4)
 
       if (changeIndex === 1) {
-        this.changeChord()
+        // Dumb hack so random matches the value the html selector. Surely there's a better way to do this.
+        let chordHack = JSON.stringify(_.sample(this.chords))
+        vue.changeChord(chordHack, affectedLine)
       } else if (changeIndex === 2) {
-        this.changeFilterQ()
-      } else if (changeIndex === 3 ) {
-        this.changeNoiseVolume()
+        let nextQ = _.sample(vue.qOptions)
+        vue.changeFilterQ(nextQ, affectedLine)
+      } else if (changeIndex === 3) {
+        let nextVol = _.random(-25, -5)
+        vue.changeNoiseVolume(nextVol, affectedLine)
       } else if (changeIndex === 4) {
-        this.changeNoisePlaybackRate()
+        let nextPlaybackRate = _.random(0.1, 0.8)
+        vue.changeNoisePlaybackRate(nextPlaybackRate, affectedLine)
       }
 
-
+    setTimeout(vue.changeNoiseParams, _.random(20000, 40000), vue)
     }
   },
   mounted() {
@@ -531,7 +574,7 @@ export default {
       // sketch.frameRate(5)
       }
       sketch.draw = () => {
-        if(this.droneStarted){
+        if (this.droneStarted) {
           sketch.background(51)
 
           zoff = 0
@@ -600,10 +643,10 @@ export default {
   border: 2px solid black;
   width: 200px;
 }
+
 #startButton:hover {
   background: #D2E9FC;
 }
-
 
 #sketch {
   width: 800px;
@@ -621,21 +664,17 @@ export default {
   display: flex;
   font-family: 'Chakra Petch', sans-serif;
   margin-top: 40px;
-
   .individualLine {
     flex-grow: 1;
     align-content: center;
-
     .title {
       font-size: 22px;
       text-decoration: underline;
     }
-
     label {
       display: block;
       margin-top: 10px;
     }
-
     input[type='range'] {
       width: 80%;
     }
